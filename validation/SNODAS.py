@@ -107,6 +107,14 @@ def snodas_ds(date, code=1036):
     Keyword arguments:
     date -- datetime object
     code -- integer specifying SNODAS product (default 1036 [Snow Depth])
+            Other options:  1025: Precipitation
+                            1034: Snow water equivalent
+                            1036: Snow depth
+                            1038: Snow pack average temperature
+                            1039: Blowing snow sublimation
+                            1044: Snow melt
+                            1050: Snow pack sublimation
+    
     """
     url = snodas_url(date)
     gz_format = snodas_file_format(date)
