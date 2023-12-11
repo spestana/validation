@@ -10,16 +10,29 @@ import numpy as np
 import xarray as xr
 import validation.utils as ut
 
-def snodas_url(date):
+def snodas_url(date, masked=None):
     """Get url of SNODAS data for given date.
+    
+    There are two versions of SNODAS, a masked version and an unmasked version. 
+    The masked data files represent snow cover in the contiguous United States, extending into Canada for certain drainage basins.
+    The unmasked data files represent snow cover in the contiguous United States, in addition to extending well into Canada as well as outlines the coast and contains parts of Mexico.
 
     Keyword arguments:
     date -- Date to fetch SNODAS data for
     """
-    if date >= datetime(2003,9,30) and date < datetime(2010,1,1):
+    if masked == True: # masked data available from September 30th 2003 to the present
+        print("you chose masked", date)
         return date.strftime('ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/masked/%Y/%m_%b/SNODAS_%Y%m%d.tar')
-    elif date >= datetime(2010,1,1):
+    elif masked == False: # unmasked data available from December 9th 2009 to the present
+        print("you chose unmasked", date)
         return date.strftime('ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/unmasked/%Y/%m_%b/SNODAS_unmasked_%Y%m%d.tar')
+    elif masked == None: # default behaviour switches from masked to unmasked on January 1st 2010
+        if date >= datetime(2003,9,30) and date < datetime(2010,1,1):
+            print("auto pick masked", date)
+            return date.strftime('ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/masked/%Y/%m_%b/SNODAS_%Y%m%d.tar')
+        elif date >= datetime(2010,1,1):
+            print("auto pick unmasked", date)
+            return date.strftime('ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/unmasked/%Y/%m_%b/SNODAS_unmasked_%Y%m%d.tar')
 
 
 def snodas_file_format(date):
@@ -101,7 +114,7 @@ def tar_to_snodas(tar, gz_format, code=1036):
 
     return ds
 
-def snodas_ds(date, code=1036):
+def snodas_ds(date, masked=None, code=1036):
     """Get SNODAS data as GDAL dataset for specific date.
 
     Keyword arguments:
@@ -116,7 +129,7 @@ def snodas_ds(date, code=1036):
                             1050: Snow pack sublimation
     
     """
-    url = snodas_url(date)
+    url = snodas_url(date, masked)
     gz_format = snodas_file_format(date)
     tar = ut.url_to_tar(url)
     return tar_to_snodas(tar, gz_format, code=code)
