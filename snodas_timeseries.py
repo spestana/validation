@@ -62,60 +62,46 @@ def dask_start_cluster(
 
 
 
-# given a shapefile, get the bounding box coords and subset dataset to that area
-sf_path = Path('/home/spestana/git/Skagit/raw_data/gis/SkagitRiver_BasinBoundary.shp').expanduser()
-sf = gpd.read_file(str(sf_path))
-#minx, miny, maxx, maxy = sf.geometry[0].bounds
-
 
 if __name__ == '__main__':
-    with dask_start_cluster(
-                            workers=6,
-                            threads=2,
-                            ip_address='http://dshydro.ce.washington.edu',
-                            port=":8786",
-                            open_browser=False,
-                            verbose=True,
-                            ) as client:
+    
+    
+    # given a shapefile, get the bounding box coords and subset dataset to that area
+    sf_path = Path('/home/spestana/git/Skagit/raw_data/gis/SkagitRiver_BasinBoundary.shp').expanduser()
+    sf = gpd.read_file(str(sf_path))
+
+    # find all SNOTEL sites within basin
+    variables = [SnotelPointData.ALLOWED_VARIABLES.SNOWDEPTH,
+        SnotelPointData.ALLOWED_VARIABLES.SWE,
+        SnotelPointData.ALLOWED_VARIABLES.PRECIPITATION,
+        SnotelPointData.ALLOWED_VARIABLES.TEMP,
+        SnotelPointData.ALLOWED_VARIABLES.RH,]
+
+    # Find all the points in the area for our variables
+    points = SnotelPointData.points_from_geometry(sf, variables)
+    print(f'Found {len(points)} SNOTEL sites within shapefile boundary')
+    # turn that iterator into a dataframe
+    pts_df = points.to_dataframe()
+    
+    
+    
+    with dask_start_cluster(workers=6, threads=2, verbose=False) as client:
         
-        
-        ds_clipped = xr.open_zarr('/data0/images/SNODAS/skagit/SNODAS_test.zarr')
+        ds_clipped = xr.open_zarr('/data0/images/SNODAS/skagit/SNODAS_skagit.zarr')
         
         # get basin-wide stats
-        ds_mean_swe = ds_clipped.swe.mean(axis=(1,2)) / 1000 # scale factor of 1000
-        ds_median_swe = ds_clipped.swe.median(axis=(1,2)) / 1000 # scale factor of 1000
-        ds_q25_swe = ds_clipped.swe.quantile(0.25, dim=['lon','lat']) / 1000 # scale factor of 1000
-        ds_q75_swe = ds_clipped.swe.quantile(0.75, dim=['lon','lat']) / 1000 # scale factor of 1000
+        ds_mean_swe = ds_clipped.swe.mean(axis=(1,2)) / 1000 # scale factor of 1000 to get swe in meters
+        ds_median_swe = ds_clipped.swe.median(axis=(1,2)) / 1000 # scale factor of 1000 to get swe in meters
+        ds_q25_swe = ds_clipped.swe.quantile(0.25, dim=['lon','lat']) / 1000 # scale factor of 1000 to get swe in meters
+        ds_q75_swe = ds_clipped.swe.quantile(0.75, dim=['lon','lat']) / 1000 # scale factor of 1000 to get swe in meters
         # output mean swe basin-wide        
         df_mean_swe = ds_mean_swe.to_dataframe()
         df_mean_swe.to_csv('SNODAS_SkagitBasin_meanSWE.csv')
         
         
-        
-        # find all SNOTEL sites within basin
-        variables = [SnotelPointData.ALLOWED_VARIABLES.SNOWDEPTH,
-            SnotelPointData.ALLOWED_VARIABLES.SWE,
-            SnotelPointData.ALLOWED_VARIABLES.PRECIPITATION,
-            SnotelPointData.ALLOWED_VARIABLES.TEMP,
-            SnotelPointData.ALLOWED_VARIABLES.RH,]
-
-        #variables = [SnotelPointData.ALLOWED_VARIABLES.PRECIPITATION]
-
-        # Find all the points in the area for our variables
-        points = SnotelPointData.points_from_geometry(sf, variables)
-        print(len(points))
-        # This is an iterator
-        print(type(points))
-        # It contains the points in a `points` attribute
-        print(points.points)
-
-        # turn that iterator into a dataframe
-        pts_df = points.to_dataframe()
-        
-        
         # for each SNOTEL site, output a timeseries from SNODAS at that site
         for i, point in pts_df.iterrows():
-            ds_pt = ds_clipped.sel(lon=point.geometry.x, lat=point.geometry.y, method='nearest').swe
+            ds_pt = ds_clipped.sel(lon=point.geometry.x, lat=point.geometry.y, method='nearest').swe / 1000 # scale factor of 1000 to get swe in meters
             df_pt = ds_pt.to_dataframe()
             out_filename = f'SNODAS_at_{point['name'].replace(' ','')}_{point['id'].replace(':','_')}.csv'
-            df_mean_swe.to_csv(out_filename)
+            df_pt.to_csv(out_filename)
